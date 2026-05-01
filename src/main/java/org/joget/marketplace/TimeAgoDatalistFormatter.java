@@ -67,6 +67,10 @@ public class TimeAgoDatalistFormatter extends DataListColumnFormatDefault {
         return " " + AppPluginUtil.getMessage("org.joget.marketplace.TimeAgoDatalistFormatter.minute(s)", getClassName(), MESSAGE_PATH) + " ";
     }
 
+    public String getJustNow() {
+        return AppPluginUtil.getMessage("org.joget.marketplace.TimeAgoDatalistFormatter.justNow", getClassName(), MESSAGE_PATH);
+    }
+
     public String getTryDefaultFormatErrorMsg() {
         return AppPluginUtil.getMessage("org.joget.marketplace.TimeAgoDatalistFormatter.tryDefaultFormatErrorMsg", getClassName(), MESSAGE_PATH);
     }
@@ -360,8 +364,10 @@ public class TimeAgoDatalistFormatter extends DataListColumnFormatDefault {
         // Format final datetime output based on user configuration
         String dateOutputFormat = getPropertyString("dateOutputFormat");
         String inclDateOutputFormat = getPropertyString("inclDateOutputFormat");
-        if (!dateOutputFormat.equals("") && !dateOutputFormat.isEmpty()) {
+        if (!dateOutputFormat.isEmpty()) {
             diff = formatDateTimeOutput(diff, dateOutputFormat, inclDateOutputFormat);
+        } else {
+            diff = applyRedditStyle(diff);
         }
         return diff;
     }
@@ -457,66 +463,80 @@ public class TimeAgoDatalistFormatter extends DataListColumnFormatDefault {
         return finalOutput;
     }
 
+    private String applyRedditStyle(String diff) {
+        String[][] entries = {
+            {"(\\d+)\\s+year\\(s\\)",   "year"},
+            {"(\\d+)\\s+month\\(s\\)",  "month"},
+            {"(\\d+)\\s+day\\(s\\)",    "day"},
+            {"(\\d+)\\s+hour\\(s\\)",   "hour"},
+            {"(\\d+)\\s+minute\\(s\\)", "minute"}
+        };
+        for (String[] entry : entries) {
+            Matcher m = Pattern.compile(entry[0]).matcher(diff);
+            if (m.find()) {
+                int value = Integer.parseInt(m.group(1));
+                if (value > 0) {
+                    switch (entry[1]) {
+                        case "year":   return value + " " + getYear().trim();
+                        case "month":  return value + " " + getMonth().trim();
+                        case "day":    return value + " " + getDay().trim();
+                        case "hour":   return value + " " + getHour().trim();
+                        case "minute": return value + " " + getMinute().trim();
+                    }
+                }
+            }
+        }
+        return getJustNow();
+    }
+
+    private String escapeHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
     @Override
     public String format(DataList dataList, DataListColumn column, Object row, Object value) {
 
         AppDefinition appDef = AppUtil.getCurrentAppDefinition();
         String result = (String) value;
-
         String duration = getPropertyString("duration");
+        String diff;
+        String tooltip;
 
         if (duration.equals("today")) {
-
-            // Get input Column Date and Today Date
             String columnStr = result;
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
             String todayStr = LocalDateTime.now().format(formatter);
-            // Outputs
-            if (!"invalidTimeInputs".equals(checkDateOrTime(columnStr, todayStr))) {
-                return checkDateOrTime(columnStr, todayStr);
-
-            } else if ("invalidTimeInputs".equals(checkDateOrTime(columnStr, todayStr))) {
+            diff = checkDateOrTime(columnStr, todayStr);
+            tooltip = columnStr;
+            if ("invalidTimeInputs".equals(diff)) {
                 LogUtil.info(getClass().getName(), getTryDefaultFormatErrorMsg() + columnStr + ", " + todayStr);
                 return columnStr;
             }
-
         } else if (duration.equals("anotherDate")) {
-
-            // Get input Column Date
             String columnStr = result;
-
-            // Get input Target Date
             String targetStr = getPropertyString("targetDate");
             targetStr = (String) DataListService.evaluateColumnValueFromRow(row, targetStr);
-
-            // Outputs
-            if (!"invalidTimeInputs".equals(checkDateOrTime(columnStr, targetStr))) {
-                return checkDateOrTime(columnStr, targetStr);
-
-            } else if ("invalidTimeInputs".equals(checkDateOrTime(columnStr, targetStr))) {
+            diff = checkDateOrTime(columnStr, targetStr);
+            tooltip = columnStr + " / " + targetStr;
+            if ("invalidTimeInputs".equals(diff)) {
                 LogUtil.info(getClass().getName(), getTryDefaultFormatErrorMsg() + columnStr + ", " + targetStr);
                 return columnStr;
             }
-
         } else if (duration.equals("twoDates")) {
-
-            // Get input From Date
             String fromStr = getPropertyString("fromDate");
             fromStr = (String) DataListService.evaluateColumnValueFromRow(row, fromStr);
-
-            // Get input To Date
             String toStr = getPropertyString("toDate");
             toStr = (String) DataListService.evaluateColumnValueFromRow(row, toStr);
-
-            // Outputs
-            if (!"invalidTimeInputs".equals(checkDateOrTime(fromStr, toStr))) {
-                return checkDateOrTime(fromStr, toStr);
-
-            } else if ("invalidTimeInputs".equals(checkDateOrTime(fromStr, toStr))) {
-                LogUtil.info(getClass().getName(), getTryDefaultFormatErrorMsg()  + fromStr + ", " + toStr);
+            diff = checkDateOrTime(fromStr, toStr);
+            tooltip = fromStr + " / " + toStr;
+            if ("invalidTimeInputs".equals(diff)) {
+                LogUtil.info(getClass().getName(), getTryDefaultFormatErrorMsg() + fromStr + ", " + toStr);
                 return result;
             }
+        } else {
+            return result;
         }
-        return result;
+
+        return "<span title=\"" + escapeHtml(tooltip) + "\">" + diff + "</span>";
     }
 }
