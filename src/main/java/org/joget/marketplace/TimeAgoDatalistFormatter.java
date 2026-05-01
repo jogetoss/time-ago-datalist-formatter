@@ -34,7 +34,7 @@ public class TimeAgoDatalistFormatter extends DataListColumnFormatDefault {
     }
 
     public String getVersion() {
-        return "7.0.4";
+        return "7.0.4-automatic";
     }
 
     public String getDescription() {
